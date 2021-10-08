@@ -12,7 +12,6 @@
 
 import gc
 import math
-from concurrent.futures import ProcessPoolExecutor as Pool
 from copy import deepcopy
 from functools import partial
 from typing import List, Union, Tuple
@@ -42,7 +41,7 @@ def split_sentences(
     use_quotes_brackets_processing: bool = False,
     max_recover_step: int = 5,
     max_recover_length: int = 20000,
-    backend: str = "pynori",
+    backend: str = "mecab",
     num_workers: int = -1,
     disable_gc: bool = True,
 ) -> Union[List[str], List[List[str]]]:
@@ -93,63 +92,62 @@ def split_sentences(
     num_workers = get_num_workers(num_workers)
     results = []
 
-    with Pool(max_workers=num_workers) as pool:
-        max_recover_step = length_constraints(
-            text,
-            max_recover_length,
-            max_recover_step,
-        )
+    max_recover_step = length_constraints(
+        text,
+        max_recover_length,
+        max_recover_step,
+    )
 
-        mp_input_texts = []
-        mp_postprocessing = []
-        mp_temp = []
+    mp_input_texts = []
+    mp_postprocessing = []
+    mp_temp = []
 
-        if isinstance(text, str):
-            _text = [text]
-        else:
-            _text = text
+    if isinstance(text, str):
+        _text = [text]
+    else:
+        _text = text
 
-        for input_text in pool.map(build_preprocessed_list, _text):
-            if len(input_text) == 0:
-                input_text.append("")
+    for input_text in map(build_preprocessed_list, _text):
+        if len(input_text) == 0:
+            input_text.append("")
 
-            mp_temp.append(input_text)
-            mp_input_texts += input_text
+        mp_temp.append(input_text)
+        mp_input_texts += input_text
 
-        for _input_for_pp in mp_temp:
-            out = "".join(_input_for_pp).replace(" ", "")
-            for special in Const.quotes_or_brackets:
-                out = out.replace(special, "")
+    for _input_for_pp in mp_temp:
+        out = "".join(_input_for_pp).replace(" ", "")
+        for special in Const.quotes_or_brackets:
+            out = out.replace(special, "")
 
-            mp_postprocessing.append(out)
+        mp_postprocessing.append(out)
 
-        results += pool.map(
-            partial(
-                _split_sentences,
-                use_heuristic=use_heuristic,
-                use_quotes_brackets_processing=use_quotes_brackets_processing,
-                max_recover_step=max_recover_step,
-                max_recover_length=max_recover_length,
-                backend=backend,
-            ),
-            mp_input_texts,
-        )
+    results += map(
+        partial(
+            _split_sentences,
+            use_heuristic=use_heuristic,
+            use_quotes_brackets_processing=use_quotes_brackets_processing,
+            max_recover_step=max_recover_step,
+            max_recover_length=max_recover_length,
+            backend=backend,
+        ),
+        mp_input_texts,
+    )
 
-        mp_output_final = []
-        mp_temp.clear()
-        _results = clear_list_to_sentences(results)
+    mp_output_final = []
+    mp_temp.clear()
+    _results = clear_list_to_sentences(results)
 
-        for result in _results:
-            mp_temp += result
-            out = "".join(mp_temp).replace(" ", "")
-            for special in Const.quotes_or_brackets:
-                out = out.replace(special, "")
+    for result in _results:
+        mp_temp += result
+        out = "".join(mp_temp).replace(" ", "")
+        for special in Const.quotes_or_brackets:
+            out = out.replace(special, "")
 
-            if out in mp_postprocessing:
-                mp_output_final.append(mp_temp)
-                mp_temp = []
+        if out in mp_postprocessing:
+            mp_output_final.append(mp_temp)
+            mp_temp = []
 
-        results = mp_output_final
+    results = mp_output_final
 
     if disable_gc:
         gc.enable()

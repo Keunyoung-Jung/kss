@@ -28,7 +28,7 @@ from kss.rule import Table, Stats
 logging.basicConfig(
     format="[Korean Sentence Splitter]: %(message)s", level=logging.WARNING
 )
-logging.warning("Initializing Kss...")
+# logging.warning("Initializing Kss...")
 
 
 class Const:
